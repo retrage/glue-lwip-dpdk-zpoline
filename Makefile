@@ -36,7 +36,7 @@ LDFLAGS += $(shell PKG_CONFIG_PATH=$(DPDK_PKG_CONFIG_PATH) $(PKGCONF) --libs lib
 LWIP_DIR = $(dir $(abspath $(lastword $(MAKEFILE_LIST))))lwip
 LWIP_SRC_DIR = $(LWIP_DIR)/lwip-$(LWIP_VER)
 CONTRIB_SRC_DIR = $(LWIP_DIR)/contrib-$(CONTRIB_VER)
-CFLAGS += -I$(LWIP_SRC_DIR)/src/include -I$(CONTRIB_SRC_DIR) -I$(CONTRIB_SRC_DIR)/ports/unix/port/include
+CFLAGS += -I$(LWIP_SRC_DIR)/src/include -I$(CONTRIB_SRC_DIR) -I$(CONTRIB_SRC_DIR)/ports/unix/port/include -I.
 LWIP_OBJS = $(LWIP_SRC_DIR)/src/api/api_lib.o \
 			$(LWIP_SRC_DIR)/src/api/api_msg.o \
 			$(LWIP_SRC_DIR)/src/api/err.o \
