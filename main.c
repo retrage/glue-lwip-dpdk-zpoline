@@ -487,16 +487,8 @@ static long epoll_syscall(long a1, long a2, long a3,
 		case __NR_fcntl: // 72
 			ret = 0;
 			break;
-		case __NR_epoll_create: // 213
-			ret = lwip_syscall_epoll_create((int) a2);
 			break;
-		case __NR_epoll_ctl_old: // 214
-			ret = lwip_syscall_epoll_ctl((int) a2, (int) a3, (int) a4, (struct epoll_event *) a5);
-			break;
-		case __NR_epoll_wait_old: // 215
-			ret = lwip_syscall_epoll_wait((int) a2, (struct epoll_event *) a3, (int) a4, (int) a5);
-			break;
-		case __NR_epoll_wait: // 232
+		case __NR_epoll_pwait: // 232
 			ret = lwip_syscall_epoll_wait((int) a2, (struct epoll_event *) a3, (int) a4, (int) a5);
 			break;
 		case __NR_epoll_ctl: // 233
@@ -539,10 +531,7 @@ static long hook_function(long a1, long a2, long a3,
 			if (lfd[a2].used)
 				return lwip_syscall(a1, a2, a3, a4, a5, a6, a7);
 			return next_sys_call(a1, a2, a3, a4, a5, a6, a7);
-		case __NR_epoll_create: // 213
-		case __NR_epoll_ctl_old: // 214
-		case __NR_epoll_wait_old: // 215
-		case __NR_epoll_wait: // 232
+		case __NR_epoll_pwait: // 232
 		case __NR_epoll_ctl: // 233
 		case __NR_epoll_create1: // 291
 			return epoll_syscall(a1, a2, a3, a4, a5, a6, a7);
