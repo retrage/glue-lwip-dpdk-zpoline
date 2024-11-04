@@ -3,6 +3,8 @@ PROGS = libzphook_lwip.so
 CC = gcc
 PKGCONF = pkg-config
 
+ARCH = $(shell uname -m)
+
 DPDK_VER=22.11.1
 LWIP_VER=2.1.3
 CONTRIB_VER=2.1.0
@@ -25,7 +27,7 @@ OBJS = $(C_SRCS:.c=.o)
 DPDK_DIR = $(dir $(abspath $(lastword $(MAKEFILE_LIST))))dpdk
 DPDK_SRC_DIR = $(DPDK_DIR)/dpdk-$(DPDK_VER)
 DPDK_INSTALL_DIR = $(DPDK_DIR)/install
-DPDK_PKG_CONFIG_PATH=$(DPDK_INSTALL_DIR)/lib/x86_64-linux-gnu/pkgconfig
+DPDK_PKG_CONFIG_PATH=$(DPDK_INSTALL_DIR)/lib/$(ARCH)-linux-gnu/pkgconfig
 DPDK_PKG_CONFIG_FILE=$(DPDK_PKG_CONFIG_PATH)/libdpdk.pc
 CFLAGS += $(shell PKG_CONFIG_PATH=$(DPDK_PKG_CONFIG_PATH) $(PKGCONF) --cflags libdpdk)
 LDFLAGS += $(shell PKG_CONFIG_PATH=$(DPDK_PKG_CONFIG_PATH) $(PKGCONF) --libs libdpdk)
@@ -110,7 +112,7 @@ $(LWIP_SRC_DIR): $(LWIP_SRC_DIR).zip
 	unzip -n $< -d $(LWIP_DIR)
 
 $(DPDK_PKG_CONFIG_FILE): $(DPDK_SRC_DIR)
-	meson --prefix=$(DPDK_INSTALL_DIR) --libdir=lib/x86_64-linux-gnu $(DPDK_SRC_DIR)/build $(DPDK_SRC_DIR)
+	meson --prefix=$(DPDK_INSTALL_DIR) --libdir=lib/$(ARCH)-linux-gnu $(DPDK_SRC_DIR)/build $(DPDK_SRC_DIR)
 	ninja -C $(DPDK_SRC_DIR)/build
 	ninja -C $(DPDK_SRC_DIR)/build install
 
