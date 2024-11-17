@@ -67,7 +67,7 @@
 
 #include <netif/ethernet.h>
 
-typedef long (*syscall_fn_t)(long, long, long, long, long, long, long);
+typedef long (*syscall_fn_t)(long, long, long, long, long, long, long, long);
 
 static syscall_fn_t next_sys_call = NULL;
 
@@ -303,21 +303,23 @@ static int lwip_syscall_close(int fd)
 	return 0;
 }
 
+static inline bool lwip_syscall_socket_should_handle(int domain, int type, int protocol)
+{
+	return domain == AF_INET && type == SOCK_STREAM && (protocol == 0 || protocol == IPPROTO_TCP);
+}
+
 static int lwip_syscall_socket(int domain, int type, int protocol)
 {
-	if (domain == AF_INET
-			&& type == SOCK_STREAM
-			&& (protocol == 0 || protocol == IPPROTO_TCP)) {
-		int fd;
-		assert((fd = open("/dev/null", O_RDONLY)) != -1);
-		lfd[fd].used = 1;
-		assert((lfd[fd].tpcb = tcp_new()) != NULL);
-		tcp_arg(lfd[fd].tpcb, (void *)((uintptr_t) fd));
-		tcp_ext_arg_set_callbacks(lfd[fd].tpcb, 0, &tcp_ext_arg_cbs);
-		tcp_ext_arg_set(lfd[fd].tpcb, 0, (void *) ((uintptr_t) fd));
-		return fd;
-	} else
-		return next_sys_call(__NR_socket, domain, type, protocol, 0, 0, 0);
+	assert(lwip_syscall_socket_should_handle(domain, type, protocol));
+
+	int fd;
+	assert((fd = open("/dev/null", O_RDONLY)) != -1);
+	lfd[fd].used = 1;
+	assert((lfd[fd].tpcb = tcp_new()) != NULL);
+	tcp_arg(lfd[fd].tpcb, (void *)((uintptr_t) fd));
+	tcp_ext_arg_set_callbacks(lfd[fd].tpcb, 0, &tcp_ext_arg_cbs);
+	tcp_ext_arg_set(lfd[fd].tpcb, 0, (void *) ((uintptr_t) fd));
+	return fd;
 }
 
 static int lwip_syscall_accept(int sockfd, struct sockaddr *addr __attribute__((unused)), socklen_t *addrlen __attribute__((unused)))
@@ -408,46 +410,52 @@ static int lwip_syscall_epoll_wait(int epfd, struct epoll_event *events, int max
 	return e;
 }
 
-static long lwip_syscall(long a1, long a2, long a3,
-			 long a4,
+static long lwip_syscall(long a2, long a3, long a4,
 			 long a5 __attribute__((unused)),
 			 long a6 __attribute__((unused)),
-			 long a7 __attribute__((unused)))
+			 long a7 __attribute__((unused)),
+			 long a1,
+			 long a8)
 {
 	long ret = 0;
 	switch (a1) {
-		case __NR_read: // 0
+		case __NR_read: // 63
 			ret = lwip_syscall_read((int) a2, (void *) a3, (size_t) a4);
 			break;
-		case __NR_write: // 1
+		case __NR_write: // 64
 			ret = lwip_syscall_write((int) a2, (const void *) a3, (size_t) a4);
 			break;
-		case __NR_close: // 3
+		case __NR_close: // 57
 			ret = lwip_syscall_close((int) a2);
 			break;
-		case __NR_ioctl: // 16
+		case __NR_ioctl: // 29
 			ret = 0;
 			break;
-		case __NR_socket: // 41
-			ret = lwip_syscall_socket((int) a2, (int) a3, (int) a4);
+		case __NR_socket:{ // 198
+			if (lwip_syscall_socket_should_handle((int) a2, (int) a3, (int) a4)) {
+				ret = lwip_syscall_socket((int) a2, (int) a3, (int) a4);
+			} else {
+				ret = next_sys_call(a2, a3, a4, a5, a6, a7, a1, a8);
+			}
 			break;
-		case __NR_accept: // 43
-		case __NR_accept4: // 288
+		}
+		case __NR_accept: // 202
+		case __NR_accept4: // 242
 			ret = lwip_syscall_accept((int) a2, (struct sockaddr *) a3, (socklen_t *) a4);
 			break;
-		case __NR_bind: // 49
+		case __NR_bind: // 200
 			ret = lwip_syscall_bind((int) a2, (const struct sockaddr *) a3, (socklen_t) a4);
 			break;
-		case __NR_listen: // 50
+		case __NR_listen: // 201
 			ret = lwip_syscall_listen((int) a2, (int) a3);
 			break;
-		case __NR_setsockopt: // 54
+		case __NR_setsockopt: // 208
 			ret = 0;
 			break;
-		case __NR_getsockopt: // 55
+		case __NR_getsockopt: // 209
 			ret = 0;
 			break;
-		case __NR_fcntl: // 72
+		case __NR_fcntl: // 25
 			ret = 0;
 			break;
 		default:
@@ -474,27 +482,28 @@ static int lwip_syscall_epoll_create(int size __attribute__((unused)))
 	return fd;
 }
 
-static long epoll_syscall(long a1, long a2, long a3,
-			  long a4, long a5,
+static long epoll_syscall(long a2, long a3, long a4,
+			  long a5,
 			  long a6 __attribute__((unused)),
-			  long a7 __attribute__((unused)))
+			  long a7 __attribute__((unused)),
+			  long a1)
 {
 	long ret = 0;
 	switch (a1) {
-		case __NR_close: // 3
+		case __NR_close: // 57
 			ret = lwip_syscall_epoll_close((int) a2);
 			break;
-		case __NR_fcntl: // 72
+		case __NR_fcntl: // 25
 			ret = 0;
 			break;
 			break;
-		case __NR_epoll_pwait: // 232
+		case __NR_epoll_pwait: // 22
 			ret = lwip_syscall_epoll_wait((int) a2, (struct epoll_event *) a3, (int) a4, (int) a5);
 			break;
-		case __NR_epoll_ctl: // 233
+		case __NR_epoll_ctl: // 21
 			ret = lwip_syscall_epoll_ctl((int) a2, (int) a3, (int) a4, (struct epoll_event *) a5);
 			break;
-		case __NR_epoll_create1: // 291
+		case __NR_epoll_create1: // 20
 			ret = lwip_syscall_epoll_create((int) a2);
 			break;
 		default:
@@ -507,36 +516,44 @@ static long epoll_syscall(long a1, long a2, long a3,
 
 static long hook_function(long a1, long a2, long a3,
 			  long a4, long a5, long a6,
-			  long a7)
+			  long a7  /* syscall number */,
+			  long a8)
 {
-	switch (a1) {
-		case __NR_socket: // 41
-			return lwip_syscall(a1, a2, a3, a4, a5, a6, a7);
-		case __NR_close: // 3
-		case __NR_fcntl: // 72
-			if (lfd[a2].used)
-				return lwip_syscall(a1, a2, a3, a4, a5, a6, a7);
-			if (efd[a2].used)
+	// printf("output from hook_function: syscall number %ld\n", a7);
+	// return next_sys_call(a1, a2, a3, a4, a5, a6, a7, a8);
+
+	switch (a7) {
+		case __NR_socket: // 198
+			return lwip_syscall(a1, a2, a3, a4, a5, a6, a7, a8);
+		case __NR_close: // 57
+		case __NR_fcntl: // 25
+			if (lfd[a1].used)
+				return lwip_syscall(a1, a2, a3, a4, a5, a6, a7, a8);
+			if (efd[a1].used)
 				return epoll_syscall(a1, a2, a3, a4, a5, a6, a7);
-			return next_sys_call(a1, a2, a3, a4, a5, a6, a7);
-		case __NR_read: // 0
-		case __NR_write: // 1
-		case __NR_ioctl: // 16
-		case __NR_accept: // 43
-		case __NR_bind: // 49
-		case __NR_listen: // 50
-		case __NR_setsockopt: // 54
-		case __NR_getsockopt: // 55
-		case __NR_accept4: //288
-			if (lfd[a2].used)
-				return lwip_syscall(a1, a2, a3, a4, a5, a6, a7);
-			return next_sys_call(a1, a2, a3, a4, a5, a6, a7);
-		case __NR_epoll_pwait: // 232
-		case __NR_epoll_ctl: // 233
-		case __NR_epoll_create1: // 291
+			return next_sys_call(a1, a2, a3, a4, a5, a6, a7, a8);
+		case __NR_read: // 63
+		case __NR_write: // 64
+		case __NR_ioctl: // 29
+		case __NR_accept: // 202
+		case __NR_bind: // 200
+		case __NR_listen: // 201
+		case __NR_setsockopt: // 208
+		case __NR_getsockopt: // 209
+		case __NR_accept4:{ //242
+			if (lfd[a1].used) {
+				// printf("calling lwip_syscall\n");
+				return lwip_syscall(a1, a2, a3, a4, a5, a6, a7, a8);
+			}
+			// printf("calling next_sys_call\n");
+			return next_sys_call(a1, a2, a3, a4, a5, a6, a7, a8);
+		}
+		case __NR_epoll_pwait: // 22
+		case __NR_epoll_ctl: // 21
+		case __NR_epoll_create1: // 20
 			return epoll_syscall(a1, a2, a3, a4, a5, a6, a7);
 		default:
-			return next_sys_call(a1, a2, a3, a4, a5, a6, a7);
+			return next_sys_call(a1, a2, a3, a4, a5, a6, a7, a8);
 	}
 }
 
